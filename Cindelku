@@ -1,0 +1,79 @@
+bot.py
+import time
+import hmac
+import hashlib
+import requests
+import json
+from datetime import datetime
+
+API_KEY = "bg_2f448ec1c0cb4ee71ffc0519f4923d37"
+API_SECRET = "38fb2de1d0e0ff79f9de9f12d8c032170289774cbdfc8bd2e4531ef15060734d"
+API_PASSPHRASE = "Sbg801780"
+
+symbol = "BTCUSDT"
+base_url = "https://api.bitget.com"
+
+def get_server_time():
+    url = f"{base_url}/api/mix/v1/market/time"
+    res = requests.get(url)
+    return res.json()["data"]
+
+def sign_request(timestamp, method, path, body=""):
+    message = f"{timestamp}{method}{path}{body}"
+    signature = hmac.new(API_SECRET.encode(), message.encode(), hashlib.sha256).hexdigest()
+    return signature
+
+def place_order(side):
+    timestamp = str(get_server_time())
+    method = "POST"
+    path = "/api/mix/v1/order/place"
+    url = base_url + path
+
+    body = {
+        "symbol": symbol,
+        "marginCoin": "USDT",
+        "size": "0.01",
+        "price": "",
+        "side": side,
+        "orderType": "market",
+        "timeInForceValue": "normal"
+    }
+    body_json = json.dumps(body)
+    headers = {
+        "ACCESS-KEY": API_KEY,
+        "ACCESS-SIGN": sign_request(timestamp, method, path, body_json),
+        "ACCESS-TIMESTAMP": timestamp,
+        "ACCESS-PASSPHRASE": API_PASSPHRASE,
+        "Content-Type": "application/json"
+    }
+
+    res = requests.post(url, headers=headers, data=body_json)
+    print(f"Order {side}: {res.text}")
+
+def get_candlestick():
+    url = f"{base_url}/api/mix/v1/market/candles?symbol={symbol}&granularity=1m&limit=2"
+    res = requests.get(url)
+    return res.json()["data"]
+
+def is_bullish(candle):
+    return float(candle[4]) > float(candle[1])
+
+def is_bearish(candle):
+    return float(candle[4]) < float(candle[1])
+
+while True:
+    try:
+        candles = get_candlestick()
+        latest = candles[-1]
+
+        if is_bullish(latest):
+            place_order("open_long")
+        elif is_bearish(latest):
+            place_order("open_short")
+
+        time.sleep(60)
+
+    except Exception as e:
+        print("Error:", str(e))
+        time.sleep(10)
+initial commit bot.py
